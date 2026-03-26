@@ -1,0 +1,67 @@
+version: "3.9"
+
+services:
+  # ── FastAPI RAG Backend ────────────────────────────────────────────────
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: rag-chatbot-api
+    ports:
+      - "8000:8000"
+    env_file:
+      - ../.env
+    volumes:
+      - rag-pdfs:/app/data/pdfs
+      - rag-vectorstore:/app/data/vectorstore
+      - rag-logs:/app/logs
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    networks:
+      - rag-net
+
+  # ── Streamlit Frontend ─────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.frontend
+    container_name: rag-chatbot-frontend
+    ports:
+      - "8501:8501"
+    environment:
+      - API_BASE=http://api:8000
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - rag-net
+
+  # ── (Optional) Nginx reverse proxy ────────────────────────────────────
+  # nginx:
+  #   image: nginx:alpine
+  #   container_name: rag-nginx
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   volumes:
+  #     - ./nginx.conf:/etc/nginx/nginx.conf:ro
+  #   depends_on:
+  #     - api
+  #     - frontend
+  #   networks:
+  #     - rag-net
+
+networks:
+  rag-net:
+    driver: bridge
+
+volumes:
+  rag-pdfs:
+  rag-vectorstore:
+  rag-logs:
